@@ -82,9 +82,20 @@ get-ingress +ARGS='':
 get-deployments +ARGS='':
     kubectl get deployments {{ARGS}}
 
+# Check rollout status of Kubernetes Deployment
+rollout-status DEPLOYMENT +ARGS='':
+    kubectl rollout status deployment/{{DEPLOYMENT}} --timeout=180s {{ARGS}} 
+
+# DELETE Kubernetes Deployment
+delete-deployment DEPLOYMENT +ARGS='':
+    kubectl delete deployment/{{DEPLOYMENT}} {{ARGS}}
+
 # Get Kubernetes Pods
 get-pods +ARGS='':
     kubectl get pods {{ARGS}}
+
+describe-pod POD +ARGS='':
+    kubectl describe pod/{{POD}} {{ARGS}}
 
 pods-on-nodes +ARGS='':
     kubectl get pods \
@@ -96,12 +107,16 @@ get-services +ARGS='':
     kubectl get services {{ARGS}}
 
 # Apply Kubernetes Manifests
-apply-f +ARGS='':
+apply +ARGS='':
     kubectl apply -f {{ARGS}}
 
 # Apply Kustomized Kubernetes Manifests
-apply-k +ARGS='':
+k-apply +ARGS='':
     kubectl apply -k {{ARGS}}
+
+# Diff Kustomized Kubernetes Manifests
+k-diff PATH +ARGS='':
+    kubectl diff -k {{PATH}} {{ARGS}} ||:
 
 # Wait for ready nodes
 wait-nodes +ARGS='':
@@ -147,8 +162,7 @@ scale DEPLOYMENT N +ARGS='':
         {{ARGS}}
 
 
-alias af  := apply-f
-alias ak  := apply-k
+alias ka  := k-apply
 alias ing := get-ingress
 alias no  := get-nodes
 alias ns  := get-namespaces
