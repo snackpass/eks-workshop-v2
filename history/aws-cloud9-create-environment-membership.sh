@@ -1,0 +1,1 @@
+aws cloud9 create-environment-membership --environment-id dc70bf17bbd8491c84b4ba0f8a895525  --user-arn arn:aws:sts::369356999247:assumed-role/OrganizationAccountAccessRole/nathan-probst --permissions read-write

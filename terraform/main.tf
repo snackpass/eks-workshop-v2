@@ -10,8 +10,9 @@ terraform {
 }
 
 provider "aws" {
-  region = data.aws_region.current.id
-  alias  = "default"
+  region  = data.aws_region.current.id
+  profile = "scratch"
+  alias   = "default"
 
   default_tags {
     tags = local.tags
