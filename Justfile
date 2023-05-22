@@ -7,11 +7,17 @@
 
 # EKS Workshop
 cluster_name := 'eks-workshop'
+created-by := '' 
+l-created-by := if created-by == '' { '' } else { 
+    replace('-l app.kubernetes.io/created-by=_', '_', created-by) 
+}
 
 # Node.js package.json Script Compatibility
 export PATH := "./node_modules/.bin:" + env_var('PATH')
 
-_js:
+# Wow. Possible to shebang in a Justfile.
+[private]
+js:
   #!/usr/bin/env node
   console.log('Greetings from JavaScript!')
 
@@ -26,21 +32,21 @@ install-aws-cli:
 
 # Describe an EKS Cluster
 describe-cluster JQ_PATTERN='.' EKS_CLUSTER_NAME='eks-workshop' :
-    aws eks describe-cluster --name {{EKS_CLUSTER_NAME}} | jq {{JQ_PATTERN}}
+    aws eks describe-cluster --name {{EKS_CLUSTER_NAME}} | jq {{ JQ_PATTERN }}
 
 # Describe a Fargate Profile
 describe-fargate-profile EKS_FARGATE_PROFILE JQ_PATTERN='.' EKS_CLUSTER_NAME='eks-workshop':
     aws eks describe-fargate-profile \
         --cluster-name {{EKS_CLUSTER_NAME}} \
         --fargate-profile-name {{EKS_FARGATE_PROFILE}} \
-        | jq {{JQ_PATTERN}}
+        | jq {{ JQ_PATTERN }}
 
 # Describe an EKS Node Group
 describe-nodegroup EKS_NODEGROUP_NAME JQ_PATTERN='.' EKS_CLUSTER_NAME='eks-workshop':
     aws eks describe-nodegroup \
         --cluster-name {{EKS_CLUSTER_NAME}} \
         --nodegroup-name {{EKS_NODEGROUP_NAME}} \
-        | jq {{JQ_PATTERN}}
+        | jq {{ JQ_PATTERN }}
 
 # Update an EKS Managed Node Group
 update-nodegroup EKS_NODEGROUP_NAME='managed-ondemand-20230521191515485200000028' EKS_CLUSTER_NAME='eks-workshop':
@@ -50,6 +56,13 @@ update-nodegroup EKS_NODEGROUP_NAME='managed-ondemand-20230521191515485200000028
     aws eks wait nodegroup-active \
         --cluster-name {{EKS_CLUSTER_NAME}} \
         --nodegroup-name {{EKS_NODEGROUP_NAME}}
+
+
+describe-load-balancers NAME JQ_PATTERN='.':
+    aws elbv2 describe-load-balancers \
+        --query {{ replace("'LoadBalancers[?contains(LoadBalancerName, `k8s-_`) == `true`]'", "_", NAME) }} \
+        | jq {{ JQ_PATTERN }}
+    
 
 ## EKSCTL ##
 [macos]
@@ -63,16 +76,16 @@ install-eksctl-cli:
 
 # Get EKS Node Group
 get-nodegroups EKS_CLUSTER_NAME='eks-workshop' +ARGS='':
-    eksctl get nodegroup --cluster {{EKS_CLUSTER_NAME}} --output json {{ARGS}} | jq
+    eksctl get nodegroup --cluster {{ EKS_CLUSTER_NAME }} --output json {{ ARGS }} | jq
 
 scale-nodegroup SIZE MIN MAX NAME='managed-ondemand-20230521191515485200000028' EKS_CLUSTER_NAME='eks-workshop' +ARGS='':
     eksctl scale nodegroup \
-        --cluster {{EKS_CLUSTER_NAME}} \
-        --name {{NAME}} \
-        --nodes {{SIZE}} \
-        --nodes-min {{MIN}} \
-        --nodes-max {{MAX}} \
-        {{ARGS}}
+        --cluster {{ EKS_CLUSTER_NAME }} \
+        --name {{ NAME }} \
+        --nodes {{ SIZE }} \
+        --nodes-min {{ MIN }} \
+        --nodes-max {{ MAX }} \
+        {{ ARGS }}
     @echo
     @just wait-nodes
 
@@ -84,117 +97,145 @@ get-contexts:
 
 # Use Kubernetes Context
 use-context CONTEXT_NAME='eks-workshop':
-    kubectl config use-context {{CONTEXT_NAME}}
+    kubectl config use-context {{ CONTEXT_NAME }}
 
 # Get Kubernetes Nodes
 get-nodes +ARGS='':
     kubectl get nodes \
+        {{ l-created-by }} \
         -o wide \
         --label-columns topology.kubernetes.io/zone \
         --label-columns eks.amazonaws.com/nodegroup \
-        {{ARGS}}
+        {{ ARGS }}
 
 # Describe Kubernetes Nodes
 describe-nodes +ARGS='':
-    kubectl describe nodes {{ARGS}}
+    kubectl describe nodes \
+        {{ l-created-by }} \
+        {{ ARGS }}
 
 # Describe a Kubernetes Node
 describe-node NODE +ARGS='':
-    kubectl describe node {{NODE}} {{ARGS}}
+    kubectl describe node {{ NODE }} {{ ARGS }}
 
 # Get Kubernetes Namespaces
 get-namespaces +ARGS='':
-    kubectl get namespaces {{ARGS}}
+    kubectl get namespaces \
+        {{ l-created-by }} \
+        {{ ARGS }}
 
 # Get Kubernetes Ingress
 get-ingress +ARGS='':
-    kubectl get ingress {{ARGS}}
+    kubectl get ingress \
+        {{ l-created-by }} \
+        {{ ARGS }}
 
 # Get Kubernetes Deployments
 get-deployments +ARGS='':
-    kubectl get deployments {{ARGS}}
+    kubectl get deployments \
+        {{ l-created-by }} \
+        {{ ARGS }}
+
+# Scale Kubernetes Deployment to N
+scale DEPLOYMENT N +ARGS='':
+    kubectl scale \
+        deployment/{{ DEPLOYMENT }} \
+        --replicas={{ N }} \
+        {{ ARGS }}
 
 # Check rollout status of Kubernetes Deployment
 rollout-status DEPLOYMENT NS='' +ARGS='':
-    kubectl rollout status deployment/{{DEPLOYMENT}} \
+    kubectl rollout status deployment/{{ DEPLOYMENT }} \
         -n {{ if NS != '' { NS } else { DEPLOYMENT} }} \
         --timeout=180s \
-        {{ARGS}} 
+        {{ ARGS }} 
 
 # DELETE Kubernetes Deployment
 delete-deployment DEPLOYMENT +ARGS='':
-    kubectl delete deployment/{{DEPLOYMENT}} {{ARGS}}
+    kubectl delete deployment/{{ DEPLOYMENT }} {{ ARGS }}
 
 # Get Kubernetes Pods
 get-pods +ARGS='':
-    kubectl get pods {{ARGS}}
+    kubectl get pods \
+        {{ l-created-by }} \
+        {{ ARGS }}
 
 describe-pod POD +ARGS='':
-    kubectl describe pod {{POD}} {{ARGS}}
+    kubectl describe pod {{ POD }} {{ ARGS }}
 
 pods-on-nodes +ARGS='':
     kubectl get pods \
-        {{ARGS}} \
+        {{ l-created-by }} \
+        {{ ARGS }} \
         -o=jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.nodeName}{"\n"}'
 
 # Get Kubernetes Services
-get-services +ARGS='':
-    kubectl get services {{ARGS}}
+get-services NS='' +ARGS='':
+    kubectl get services \
+        {{ if NS != '' { replace('-n _', '_', NS) } else { '-A' } }} \
+        {{ l-created-by }} \
+        {{ ARGS }}
+
+# Describe a Kubernetes Service
+describe-service SERVICE NS='' +ARGS='':
+    kubectl describe service \
+        {{ SERVICE }} \
+        -n {{ if NS != '' { NS } else { SERVICE} }} \
+        {{ ARGS }}
 
 # Apply Kubernetes Manifests
-apply +ARGS='':
-    kubectl apply -f {{ARGS}}
+apply PATH +ARGS='':
+    kubectl apply -f {{ PATH }} {{ ARGS }}
+
+# Diff Kustomized Kubernetes Manifests
+[no-exit-message]
+diff PATH +ARGS='':
+    kubectl diff -f {{ PATH }} {{ ARGS }}
 
 # Apply Kustomized Kubernetes Manifests
 apply-k +ARGS='':
-    kubectl apply -k {{ARGS}}
+    kubectl apply -k {{ ARGS }}
 
 # Diff Kustomized Kubernetes Manifests
-k-diff PATH +ARGS='':
-    kubectl diff -k {{PATH}} {{ARGS}} ||:
+[no-exit-message]
+diff-k PATH +ARGS='':
+    kubectl diff -k {{ PATH }} {{ ARGS }}
 
 # Wait for ready nodes
 wait-nodes +ARGS='':
     kubectl wait --for=condition=Ready nodes \
         --all \
         --timeout=300s \
-        {{ARGS}}
+        {{ ARGS }}
 
 # Wait for ready pods
 wait-pods +ARGS='':
     kubectl wait --for=condition=Ready pods \
         --all \
         --timeout=180s \
-        {{ARGS}}
+        {{ ARGS }}
 
 # Print Pod Logs (ex. just logs catalog -n catalog)
 logs DEPLOYMENT +ARGS='':
-    kubectl logs deployment/{{DEPLOYMENT}} \
+    kubectl logs deployment/{{ DEPLOYMENT }} \
         --all-containers=true \
-        {{ARGS}}
+        {{ ARGS }}
 
 # Print Pod Logs for terminated pods
-logs-previous DEPLOYMENT +ARGS='':
-    @just logs {{DEPLOYMENT}} \
+logs-p DEPLOYMENT +ARGS='':
+    @just logs {{ DEPLOYMENT }} \
         --previous \
-        {{ARGS}}
+        {{ ARGS }}
 
 # Tail Pod Logs (ex. just logs catalog -n catalog)
 tail DEPLOYMENT +ARGS='':
-    @just logs {{DEPLOYMENT}} {{ARGS}} -f
+    @just logs {{ DEPLOYMENT }} {{ ARGS }} -f
 
 # Exec into Pod (ex. just exec catalog -n catalog)
 exec DEPLOYMENT +ARGS='':
     kubectl exec -it \
-        deployment/{{DEPLOYMENT}} \
-        {{ARGS}}
-
-# Scale Kubernetes Deployment to N
-scale DEPLOYMENT N +ARGS='':
-    kubectl scale \
-        deployment/{{DEPLOYMENT}} \
-        --replicas={{N}} \
-        {{ARGS}}
+        deployment/{{ DEPLOYMENT }} \
+        {{ ARGS }}
 
 
 alias ing := get-ingress
