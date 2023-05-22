@@ -140,9 +140,17 @@ get-namespaces +ARGS='':
         {{ ARGS }}
 
 # Get Kubernetes Ingress
-get-ingress +ARGS='':
+get-ingress NS='' +ARGS='':
     kubectl get ingress \
+        {{ if NS != '' { replace('-n _', '_', NS) } else { '-A' } }} \
         {{ l-created-by }} \
+        {{ ARGS }}
+
+# Get Kubernetes Ingress URL
+get-ingress-url INGRESS NS='' +ARGS='':
+    kubectl get ingress {{ INGRESS }} \
+        -n {{ if NS != '' { NS } else { INGRESS} }} \
+        -o jsonpath="{.status.loadBalancer.ingress[*].hostname}{'\n'}" \
         {{ ARGS }}
 
 # Get Kubernetes Deployments
@@ -207,10 +215,10 @@ get-service-lb-url SERVICE NS='' +ARGS='':
         -o jsonpath="{.status.loadBalancer.ingress[*].hostname}{'\n'}" \
         {{ ARGS }}
 
-# Wait for an EKS Service NLB to be ready
-wait-for-lb SERVICE NS='' +ARGS='':
+[private]
+wait-for-host HOST:
     #!/usr/bin/env bash
-    export host=`just get-service-lb-url {{ SERVICE }} {{ NS }}`
+    export host={{ HOST }}
     set -Eeuo pipefail
     echo "Waiting for ${host}..."
     EXIT_CODE=0
@@ -223,6 +231,14 @@ wait-for-lb SERVICE NS='' +ARGS='':
     exit 1
     fi
     echo "You can now access http://${host}"
+
+# Wait for an EKS Service NLB to be ready
+wait-for-nlb SERVICE NS='' +ARGS='':
+    @just wait-for-host `just get-service-lb-url {{ SERVICE }} {{ NS }}` {{ ARGS }}
+
+# Wait for an EKS Ingress ALB to be ready
+wait-for-alb INGRESS NS='' +ARGS='':
+    @just wait-for-host `just get-ingress-url {{ INGRESS }} {{ NS }}` {{ ARGS }}
 
 # Apply Kubernetes Manifests
 apply PATH +ARGS='':
