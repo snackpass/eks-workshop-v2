@@ -12,6 +12,9 @@ l-created-by := if created-by == '' { '' } else {
     replace('-l app.kubernetes.io/created-by=_', '_', created-by) 
 }
 
+output := 'yaml'
+xq := if output == 'yaml' { 'yq' } else { 'jq' }
+
 # Node.js package.json Script Compatibility
 export PATH := "./node_modules/.bin:" + env_var('PATH')
 
@@ -22,31 +25,26 @@ js:
   console.log('Greetings from JavaScript!')
 
 ## AWS CLI ##
-[macos]
-install-aws-cli:
-    brew install awscli
-    @echo 
-    which aws
-    @echo
-    aws --version
 
 # Describe an EKS Cluster
 describe-cluster JQ_PATTERN='.' EKS_CLUSTER_NAME='eks-workshop' :
-    aws eks describe-cluster --name {{ EKS_CLUSTER_NAME }} | jq {{ JQ_PATTERN }}
+    aws eks describe-cluster --name {{ EKS_CLUSTER_NAME }} | {{ xq }} {{ JQ_PATTERN }}
 
 # Describe a Fargate Profile
 describe-fargate-profile EKS_FARGATE_PROFILE JQ_PATTERN='.' EKS_CLUSTER_NAME='eks-workshop':
     aws eks describe-fargate-profile \
         --cluster-name {{ EKS_CLUSTER_NAME }} \
         --fargate-profile-name {{ EKS_FARGATE_PROFILE }} \
-        | jq {{ JQ_PATTERN }}
+        --output {{ output }} \
+        | {{ xq }} {{ JQ_PATTERN }}
 
 # Describe an EKS Node Group
 describe-nodegroup EKS_NODEGROUP_NAME JQ_PATTERN='.' EKS_CLUSTER_NAME='eks-workshop':
     aws eks describe-nodegroup \
         --cluster-name {{ EKS_CLUSTER_NAME }} \
         --nodegroup-name {{ EKS_NODEGROUP_NAME }} \
-        | jq {{ JQ_PATTERN }}
+        --output {{ output }} \
+        | {{ xq }} {{ JQ_PATTERN }}
 
 # Update an EKS Managed Node Group
 update-nodegroup EKS_NODEGROUP_NAME='managed-ondemand-20230521191515485200000028' EKS_CLUSTER_NAME='eks-workshop':
@@ -61,7 +59,8 @@ update-nodegroup EKS_NODEGROUP_NAME='managed-ondemand-20230521191515485200000028
 describe-load-balancers NAME JQ_PATTERN='.':
     aws elbv2 describe-load-balancers \
         --query {{ replace("'LoadBalancers[?contains(LoadBalancerName, `k8s-_`) == `true`]'", "_", NAME) }} \
-        | jq {{ JQ_PATTERN }}
+        --output {{ output }} \
+        | {{ xq }} {{ JQ_PATTERN }}
     
 # Descrive the health of an NLB Target Group
 describe-target-health NAME JQ_PATTERN='.':
@@ -76,22 +75,19 @@ describe-target-health NAME JQ_PATTERN='.':
         | jq -r '.TargetGroups[0].TargetGroupArn')
     aws elbv2 describe-target-health \
         --target-group-arn $TARGET_GROUP_ARN \
-        | jq {{ JQ_PATTERN }}
+        --output {{ output }} \
+        | {{ xq }} {{ JQ_PATTERN }}
 
 
 ## EKSCTL ##
-[macos]
-install-eksctl-cli:
-    brew tap weaveworks/tap
-    brew install weaveworks/tap/eksctl
-    @echo
-    which eksctl
-    @echo
-    eksctl version
 
 # Get EKS Node Group
-get-nodegroups EKS_CLUSTER_NAME='eks-workshop' +ARGS='':
-    eksctl get nodegroup --cluster {{ EKS_CLUSTER_NAME }} --output json {{ ARGS }} | jq
+get-nodegroups EKS_CLUSTER_NAME='eks-workshop' PATTERN='.' +ARGS='':
+    eksctl get nodegroup \
+        --cluster {{ EKS_CLUSTER_NAME }} \
+        --output {{ output }} \
+        {{ ARGS }} \
+        | {{ xq }} {{ PATTERN }}
 
 scale-nodegroup SIZE MIN MAX NAME='managed-ondemand-20230521191515485200000028' EKS_CLUSTER_NAME='eks-workshop' +ARGS='':
     eksctl scale nodegroup \
@@ -103,6 +99,7 @@ scale-nodegroup SIZE MIN MAX NAME='managed-ondemand-20230521191515485200000028' 
         {{ ARGS }}
     @echo
     @just wait-nodes
+
 
 ## KUBECTL ##
 
@@ -159,6 +156,20 @@ get-deployments +ARGS='':
         {{ l-created-by }} \
         {{ ARGS }}
 
+# Get a Kuberenetes Deployment
+get-deployment DEPLOYMENT NS='' PATTERN='.' +ARGS='':
+    kubectl get deployment {{ DEPLOYMENT }} \
+        -o {{ output }} \
+        -n {{ if NS != '' { NS } else { DEPLOYMENT } }} \
+        {{ ARGS }} \
+        | {{ xq }} {{ PATTERN }}
+
+get-deployment-env DEPLOYMENT NS='' +ARGS='':
+    @just output={{ output }} get-deployment {{ DEPLOYMENT }} \
+        {{ if NS != '' { NS } else { DEPLOYMENT } }} \
+        "'.spec.template.spec.containers[] | .env'" \
+        {{ ARGS }}
+
 # Scale Kubernetes Deployment to N
 scale DEPLOYMENT N NS='' +ARGS='':
     kubectl scale \
@@ -192,6 +203,92 @@ pods-on-nodes +ARGS='':
         {{ l-created-by }} \
         {{ ARGS }} \
         -o=jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.nodeName}{"\n"}'
+
+# Get Kubernetes Secret value
+get-secrets NS NAME='' +ARGS='':
+    kubectl get secrets -n {{ NS }} {{ NAME }} \
+        {{ ARGS }} 
+
+# Get Kubernetes Secret value
+get-secret-value NAME KEY NS='' +ARGS='':
+    kubectl get secrets {{ NAME }} \
+        -n {{ if NS != '' { NS } else { NAME} }} \
+        --template \{\{.data.{{ KEY }}\}\} \
+        {{ ARGS }} \
+        | base64 -d
+
+# Seal Kubernetes Secret
+seal-secret PATH:
+    kubeseal --format yaml \
+        < {{ PATH }} \
+        > {{ replace(PATH, '.yaml', '.sealed.yaml') }}
+    @just validate-sealed-secret {{ replace(PATH, '.yaml', '') }}.sealed.yaml
+
+# Unseal Kubernetes Secret
+[private]
+unseal-secret PATH CERTS:
+    @just sealed-secret-validate {{ PATH }}
+    kubeseal --recovery-unseal \
+        --format yaml \
+        --recovery-private-key {{ CERTS }} \
+        < {{ PATH }} \
+        > {{ replace(PATH, '.sealed.yaml', '') }}.unsealed.yaml
+
+# Seal Kubernetes Secret
+sealed-secret-merge-into PATH KEY VALUE:
+    @# Do not print the trailing newline character by appending \c to string.
+    @echo {{ VALUE }}\\c \
+    | kubectl create secret generic {{ KEY }} \
+        --dry-run=client --from-file=bar=/dev/stdin -o yaml \
+    | kubeseal --format yaml \
+        --merge-into {{ PATH }}
+    @just sealed-secret-validate {{ PATH }}
+
+# Fetch SealedSecret key
+sealed-secret-fetch-key:
+    kubectl get secret -l sealedsecrets.bitnami.com/sealed-secrets-key \
+        -n kube-system \
+        -o yaml > `kubectl config current-context`-sealed-secret.key
+    echo Written to `kubectl config current-context`-sealed-secret.key
+
+[private]
+sealed-secret-delete-key:
+    kubectl delete secret \
+        -n kube-system \
+        -l sealedsecrets.bitnami.com/sealed-secrets-key
+    kubectl delete pod \
+        -n kube-system \
+        -l name=sealed-secrets-controller
+    kubectl wait pods \
+        -n kube-system \
+        -l name=sealed-secrets-controller \
+        --for=condition=Ready \
+        --timeout=30s 
+
+[private]
+sealed-secret-restore-key PATH:    
+    kubectl apply -f {{ PATH }}
+    kubectl delete pod \
+        -n kube-system \
+        -l name=sealed-secrets-controller
+    kubectl wait pods \
+        -n kube-system \
+        -l name=sealed-secrets-controller \
+        --for=condition=Ready \
+        --timeout=30s 
+
+# Fetch SealedSecret keypair
+sealed-secret-fetch-cert:
+    kubeseal --fetch-cert \
+        --controller-name=sealed-secrets-controller \
+        --controller-namespace=kube-system \
+        > `kubectl config current-context`-sealed-secret-cert.pem
+
+# Unseal Kubernetes Secret
+sealed-secret-validate PATH:
+    kubeseal --validate \
+        --format yaml \
+        < {{ PATH }}
 
 # Get Kubernetes Services
 get-services NS='' +ARGS='':
@@ -273,14 +370,15 @@ wait-pods +ARGS='':
         {{ ARGS }}
 
 # Print Pod Logs (ex. just logs catalog -n catalog)
-logs DEPLOYMENT +ARGS='':
+logs DEPLOYMENT NS='' +ARGS='':
     kubectl logs deployment/{{ DEPLOYMENT }} \
+        -n {{ if NS != '' { NS } else { DEPLOYMENT } }} \
         --all-containers=true \
         {{ ARGS }}
 
 # Print Pod Logs for terminated pods
-logs-p DEPLOYMENT +ARGS='':
-    @just logs {{ DEPLOYMENT }} \
+logs-p DEPLOYMENT NS='' +ARGS='':
+    @just logs {{ DEPLOYMENT }} {{ NS }} \
         --previous \
         {{ ARGS }}
 
@@ -295,9 +393,47 @@ exec DEPLOYMENT +ARGS='':
         {{ ARGS }}
 
 
+## Aliases ##
+
 alias ing := get-ingress
 alias no  := get-nodes
 alias ns  := get-namespaces
 alias dep := get-deployments
 alias po  := get-pods
 alias svc := get-services
+
+
+## Install CLI Tools ##
+
+[macos]
+install-aws-cli:
+    brew install awscli
+    @echo 
+    which aws
+    @echo
+    aws --version
+
+[macos]
+install-eksctl-cli:
+    brew tap weaveworks/tap
+    brew install weaveworks/tap/eksctl
+    @echo
+    which eksctl
+    @echo
+    eksctl version
+
+[macos]
+install-jq:
+    brew install jq
+
+[macos]
+install-yq:
+    brew install yq
+
+[macos]
+install-kubeseal:
+    brew install kubeseal
+
+[linux]
+install-kubeseal:
+    open https://github.com/bitnami-labs/sealed-secrets#linux

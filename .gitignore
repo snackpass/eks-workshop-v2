@@ -31,3 +31,10 @@ env
 *.zip
 
 cdk.out
+
+# Sealed Secrets
+*.key
+*.pem
+*.unsealed*
+*secret*.yaml
+!*.sealed.yaml
