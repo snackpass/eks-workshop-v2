@@ -28,12 +28,21 @@ install-aws-cli:
 describe-cluster JQ_PATTERN='.' EKS_CLUSTER_NAME='eks-workshop' :
     aws eks describe-cluster --name {{EKS_CLUSTER_NAME}} | jq {{JQ_PATTERN}}
 
-# Describe an EKS NodeGroup
+# Describe an EKS Node Group
 describe-nodegroup EKS_NODEGROUP_NAME JQ_PATTERN='.' EKS_CLUSTER_NAME='eks-workshop':
     aws eks describe-nodegroup \
         --cluster-name {{EKS_CLUSTER_NAME}} \
         --nodegroup-name {{EKS_NODEGROUP_NAME}} \
         | jq {{JQ_PATTERN}}
+
+# Update an EKS Managed Node Group
+update-nodegroup EKS_NODEGROUP_NAME='managed-ondemand-20230521191515485200000028' EKS_CLUSTER_NAME='eks-workshop':
+    aws eks update-nodegroup-version \
+        --cluster-name {{EKS_CLUSTER_NAME}} \
+        --nodegroup-name {{EKS_NODEGROUP_NAME}}
+    aws eks wait nodegroup-active \
+        --cluster-name {{EKS_CLUSTER_NAME}} \
+        --nodegroup-name {{EKS_NODEGROUP_NAME}}
 
 ## EKSCTL ##
 [macos]
