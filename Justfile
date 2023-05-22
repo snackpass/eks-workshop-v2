@@ -235,14 +235,23 @@ unseal-secret PATH CERTS:
         > {{ replace(PATH, '.sealed.yaml', '') }}.unsealed.yaml
 
 # Seal Kubernetes Secret
-sealed-secret-merge-into PATH KEY VALUE:
-    @# Do not print the trailing newline character by appending \c to string.
-    @echo {{ VALUE }}\\c \
-    | kubectl create secret generic {{ KEY }} \
-        --dry-run=client --from-file=bar=/dev/stdin -o yaml \
+sealed-secret-merge-into KEY PATH:
+    #!/usr/bin/env bash
+    # Prompt the user for a password
+    echo "Please enter the secret value:"
+
+    stty -echo      # Turn off terminal echoing for security
+    read value      # Use the read command to get the user input
+    stty echo       # Turn terminal echoing back on
+
+    # Pipe the value to kubectl create secret
+    echo -n $value \
+    | kubectl create secret generic data \
+        --dry-run=client --from-file={{ KEY }}=/dev/stdin -o yaml \
     | kubeseal --format yaml \
         --merge-into {{ PATH }}
-    @just sealed-secret-validate {{ PATH }}
+    
+    just sealed-secret-validate {{ PATH }}
 
 # Fetch SealedSecret key
 sealed-secret-fetch-key:
