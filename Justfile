@@ -115,8 +115,11 @@ get-deployments +ARGS='':
     kubectl get deployments {{ARGS}}
 
 # Check rollout status of Kubernetes Deployment
-rollout-status DEPLOYMENT +ARGS='':
-    kubectl rollout status deployment/{{DEPLOYMENT}} --timeout=180s {{ARGS}} 
+rollout-status DEPLOYMENT NS='' +ARGS='':
+    kubectl rollout status deployment/{{DEPLOYMENT}} \
+        -n {{ if NS != '' { NS } else { DEPLOYMENT} }} \
+        --timeout=180s \
+        {{ARGS}} 
 
 # DELETE Kubernetes Deployment
 delete-deployment DEPLOYMENT +ARGS='':
@@ -143,7 +146,7 @@ apply +ARGS='':
     kubectl apply -f {{ARGS}}
 
 # Apply Kustomized Kubernetes Manifests
-k-apply +ARGS='':
+apply-k +ARGS='':
     kubectl apply -k {{ARGS}}
 
 # Diff Kustomized Kubernetes Manifests
@@ -194,7 +197,6 @@ scale DEPLOYMENT N +ARGS='':
         {{ARGS}}
 
 
-alias ka  := k-apply
 alias ing := get-ingress
 alias no  := get-nodes
 alias ns  := get-namespaces
