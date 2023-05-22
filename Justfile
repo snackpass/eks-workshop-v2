@@ -28,6 +28,13 @@ install-aws-cli:
 describe-cluster JQ_PATTERN='.' EKS_CLUSTER_NAME='eks-workshop' :
     aws eks describe-cluster --name {{EKS_CLUSTER_NAME}} | jq {{JQ_PATTERN}}
 
+# Describe a Fargate Profile
+describe-fargate-profile EKS_FARGATE_PROFILE JQ_PATTERN='.' EKS_CLUSTER_NAME='eks-workshop':
+    aws eks describe-fargate-profile \
+        --cluster-name {{EKS_CLUSTER_NAME}} \
+        --fargate-profile-name {{EKS_FARGATE_PROFILE}} \
+        | jq {{JQ_PATTERN}}
+
 # Describe an EKS Node Group
 describe-nodegroup EKS_NODEGROUP_NAME JQ_PATTERN='.' EKS_CLUSTER_NAME='eks-workshop':
     aws eks describe-nodegroup \
@@ -90,6 +97,10 @@ get-nodes +ARGS='':
 # Describe Kubernetes Nodes
 describe-nodes +ARGS='':
     kubectl describe nodes {{ARGS}}
+
+# Describe a Kubernetes Node
+describe-node NODE +ARGS='':
+    kubectl describe node {{NODE}} {{ARGS}}
 
 # Get Kubernetes Namespaces
 get-namespaces +ARGS='':
