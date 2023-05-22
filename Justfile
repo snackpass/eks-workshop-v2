@@ -25,8 +25,15 @@ install-aws-cli:
     aws --version
 
 # Describe an EKS Cluster
-describe-cluster EKS_CLUSTER_NAME='eks-workshop':
-    aws eks describe-cluster --name {{EKS_CLUSTER_NAME}} | jq
+describe-cluster JQ_PATTERN='.' EKS_CLUSTER_NAME='eks-workshop' :
+    aws eks describe-cluster --name {{EKS_CLUSTER_NAME}} | jq {{JQ_PATTERN}}
+
+# Describe an EKS NodeGroup
+describe-nodegroup EKS_NODEGROUP_NAME JQ_PATTERN='.' EKS_CLUSTER_NAME='eks-workshop':
+    aws eks describe-nodegroup \
+        --cluster-name {{EKS_CLUSTER_NAME}} \
+        --nodegroup-name {{EKS_NODEGROUP_NAME}} \
+        | jq {{JQ_PATTERN}}
 
 ## EKSCTL ##
 [macos]
@@ -68,7 +75,12 @@ get-nodes +ARGS='':
     kubectl get nodes \
         -o wide \
         --label-columns topology.kubernetes.io/zone \
+        --label-columns eks.amazonaws.com/nodegroup \
         {{ARGS}}
+
+# Describe Kubernetes Nodes
+describe-nodes +ARGS='':
+    kubectl describe nodes {{ARGS}}
 
 # Get Kubernetes Namespaces
 get-namespaces +ARGS='':
@@ -95,7 +107,7 @@ get-pods +ARGS='':
     kubectl get pods {{ARGS}}
 
 describe-pod POD +ARGS='':
-    kubectl describe pod/{{POD}} {{ARGS}}
+    kubectl describe pod {{POD}} {{ARGS}}
 
 pods-on-nodes +ARGS='':
     kubectl get pods \
