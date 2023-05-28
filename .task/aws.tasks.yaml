@@ -1,0 +1,92 @@
+# https://taskfile.dev
+
+version: "3"
+
+output: interleaved
+
+vars:
+  EKS_CLUSTER_NAME: '{{.CLUSTER_NAME | default "eks-workshop"}}'
+  OUTPUT: "yaml"
+  XQ: '{{if eq .OUTPUT "yaml"}}yq{{else}}jq{{end}}'
+  PATTERN: '{{.PATTERN | default "."}}'
+
+tasks:
+  eks:describe-cluster:
+    desc: "Describe an EKS Cluster [vars: name]"
+    vars:
+      EKS_CLUSTER_NAME: "{{.name | default .EKS_CLUSTER_NAME}}"
+    cmds:
+      - |
+        aws eks describe-cluster \
+          --output {{.OUTPUT}} \
+          --name {{ .EKS_CLUSTER_NAME }} \
+        | {{ .XQ }} {{ .PATTERN }}
+
+  eks:describe-fargate-profile:
+    desc: "Describe a Fargate Profile [vars: name]"
+    vars:
+      EKS_FARGATE_PROFILE: '{{.name | default ""}}'
+    cmds:
+      - |
+        aws eks describe-fargate-profile \
+          --cluster-name {{ .EKS_CLUSTER_NAME }} \
+          --output {{ .OUTPUT }} \
+          --fargate-profile-name {{ .EKS_FARGATE_PROFILE }} \
+        | {{ .XQ }} {{ .PATTERN }}
+
+  eks:describe-nodegroup:
+    desc: "Describe an EKS Node Group [vars: name]"
+    vars:
+      EKS_NODEGROUP_NAME: "{{.name}}"
+    cmds:
+      - |
+        aws eks describe-nodegroup \
+          --cluster-name {{ .EKS_CLUSTER_NAME }} \
+          --output {{ .OUTPUT }} \
+          --nodegroup-name {{ .EKS_NODEGROUP_NAME }} \
+        | {{ .XQ }} {{ .PATTERN }}
+
+  eks:update-nodegroup:
+    desc: "Update an EKS Managed Node Group [vars: name]"
+    vars:
+      EKS_NODEGROUP_NAME: "{{.name}}"
+    cmds:
+      - |
+        aws eks update-nodegroup-version \
+          --cluster-name {{ .EKS_CLUSTER_NAME }} \
+          --output {{ .OUTPUT }} \
+          --nodegroup-name {{ .EKS_NODEGROUP_NAME }}
+      - |
+        aws eks wait nodegroup-active \
+          --cluster-name {{ .EKS_CLUSTER_NAME }} \
+          --output {{ .OUTPUT }} \
+          --nodegroup-name {{ .EKS_NODEGROUP_NAME }}
+
+  elb:describe-load-balancers:
+    desc: "Describe an EKS NLB [vars: name]"
+    vars:
+      LB_NAME: "{{.name}}"
+    cmds:
+      - |
+        aws elbv2 describe-load-balancers \
+          --output {{ .OUTPUT }} \
+          --query 'LoadBalancers[?contains(LoadBalancerName, `k8s-{{.LB_NAME}}`) == `true`]' \
+        | {{ .XQ }} {{ .PATTERN }}
+
+  elb:describe-target-health:
+    desc: Describe the health of an NLB Target Group
+    vars:
+      LB_NAME: "{{.name}}"
+    set: [e, u, pipefail]
+    cmds:
+      - |
+        ALB_ARN=$(aws elbv2 describe-load-balancers \
+            --query 'LoadBalancers[?contains(LoadBalancerName, `k8s-{{.LB_NAME}}`) == `true`]' \
+            | jq -r '.[0].LoadBalancerArn')
+        TARGET_GROUP_ARN=$(aws elbv2 describe-target-groups \
+            --load-balancer-arn ${ALB_ARN} \
+            | jq -r '.TargetGroups[0].TargetGroupArn')
+        aws elbv2 describe-target-health \
+            --target-group-arn $TARGET_GROUP_ARN \
+            --output {{ .OUTPUT }} \
+            | {{ .XQ }} {{ .PATTERN }}

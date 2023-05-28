@@ -1,0 +1,41 @@
+# https://taskfile.dev
+
+version: "3"
+
+output: interleaved
+
+vars:
+  EKS_CLUSTER_NAME: '{{.CLUSTER_NAME | default "eks-workshop"}}'
+  OUTPUT: "yaml"
+  XQ: '{{if eq .OUTPUT "yaml"}}yq{{else}}jq{{end}}'
+  PATTERN: '{{.PATTERN | default "."}}'
+
+tasks:
+  get-nodegroups:
+    desc: "Get EKS Node Groups"
+    vars:
+      NODEGROUP_NAME: '{{.name | default ""}}'
+    cmds:
+      - |
+        eksctl get nodegroups \
+          --cluster {{ .EKS_CLUSTER_NAME }} \
+          --output {{ .OUTPUT }} \
+          --name {{ .NODEGROUP_NAME }} {{ .CLI_ARGS }}\
+        | {{ .XQ }} {{ .PATTERN }}
+
+  scale-nodegroups:
+    desc: "Scale EKS Node Group"
+    vars:
+      NODEGROUP_NAME: '{{.name | default "managed-ondemand-20230521191515485200000028"}}'
+      NODEGROUP_SIZE: "{{.size}}"
+      NODEGROUP_MIN: "{{.min}}"
+      NODEGROUP_MAX: "{{.max}}"
+    cmds:
+      - |
+        eksctl scale nodegroup \
+          --cluster {{ .EKS_CLUSTER_NAME }} \
+          --name {{ .NODEGROUP_NAME }} \
+          --nodes {{ .NODEGROUP_SIZE }} \
+          --nodes-min {{ .NODEGROUP_MIN }} \
+          --nodes-max {{ .NODEGROUP_MAX }} \
+          {{ .CLI_ARGS }}

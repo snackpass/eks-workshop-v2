@@ -1,0 +1,31 @@
+# https://taskfile.dev
+
+version: "3"
+
+# output: prefixed
+# output:
+#   group:
+#     begin: "\n\n🏃💨 {{.TASK}}\n"
+#     end: "\n🏁 {{.TASK}}"
+
+includes:
+  argocd: .task/argocd.tasks.yaml
+  aws: .task/aws.tasks.yaml
+  eksctrl: .task/eksctl.tasks.yaml
+  install: .task/install.tasks.yaml
+  kubectl: .task/kubectl.tasks.yaml
+  lint: .task/lint.tasks.yaml
+  sealed-secrets: .task/sealed-secrets.tasks.yaml
+
+vars:
+  NAMESPACE: "eks-workshop"
+  KUBE_CONTEXT: "eks-workshop"
+  SECRETS_FILE_PREFIX: "secrets"
+  SECRETS_CERTS: "eks-workshop-sealed-secret.key"
+
+tasks:
+  default:
+    aliases:
+      - help
+    cmds:
+      - "task --list-all"

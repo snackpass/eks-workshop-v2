@@ -6,7 +6,9 @@
     just --show {{ COMMAND }}
 
 # EKS Workshop
-cluster_name := 'eks-workshop'
+kube-context := 'eks-workshop'
+kubectl := replace('kubectl --context=_', '_', kube-context)
+
 created-by := '' 
 l-created-by := if created-by == '' { '' } else { 
     replace('-l app.kubernetes.io/created-by=_', '_', created-by) 
@@ -113,7 +115,7 @@ use-context CONTEXT_NAME='eks-workshop':
 
 # Get Kubernetes Nodes
 get-nodes +ARGS='':
-    kubectl get nodes \
+    {{ kubectl }} get nodes \
         {{ l-created-by }} \
         -o wide \
         --label-columns topology.kubernetes.io/zone \
@@ -234,6 +236,17 @@ unseal-secret PATH CERTS:
         < {{ PATH }} \
         > {{ replace(PATH, '.sealed.yaml', '') }}.unsealed.yaml
 
+unseal-secret-value KEY PATH CERTS:
+    @kubeseal --validate --format yaml < {{ PATH }}
+    @kubeseal --recovery-unseal \
+        --format yaml \
+        --recovery-private-key {{ CERTS }} \
+        < {{ PATH }} \
+        | yq '.data.{{ KEY }}' \
+        | base64 -d \
+        | pbcopy
+    @echo "Secret value copied to clipboard!"
+
 # Seal Kubernetes Secret
 sealed-secret-merge-into KEY PATH:
     #!/usr/bin/env bash
@@ -293,7 +306,7 @@ sealed-secret-fetch-cert:
         --controller-namespace=kube-system \
         > `kubectl config current-context`-sealed-secret-cert.pem
 
-# Unseal Kubernetes Secret
+# Validate Kubernetes SealedSecrets
 sealed-secret-validate PATH:
     kubeseal --validate \
         --format yaml \

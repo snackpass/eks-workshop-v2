@@ -1,0 +1,118 @@
+# https://taskfile.dev
+
+version: "3"
+
+# output: prefixed
+# output:
+#   group:
+#     begin: "\n\n🏃💨 {{.TASK}}\n"
+#     end: "\n🏁 {{.TASK}}"
+
+vars:
+  KUBECTL: kubectl --context {{ .KUBE_CONTEXT }}
+
+tasks:
+  # https://learnk8s.io/validating-kubernetes-yaml
+  default:
+    desc: Run all linters
+    cmds:
+      - task: kubeval
+      - task: polaris
+      - task: kube-score
+      - task: kube-linter
+    silent: true
+
+  kubeval:
+    desc: Run kubeval only
+    cmds:
+      - |
+        {{.KUBECTL}} kustomize . \
+        | kubeval \
+          --ignore-missing-schemas \
+          --strict -
+    silent: true
+
+  kube-linter:
+    desc: Run kube-linter only
+    cmds:
+      - |
+        {{.KUBECTL}} kustomize . \
+        | kube-linter lint -
+    silent: true
+
+  polaris:
+    desc: Run Polaris only
+    cmds:
+      - |
+        {{.KUBECTL}} kustomize . \
+        | polaris audit \
+          --only-show-failed-tests true \
+          --format=pretty \
+          --audit-path -
+    silent: true
+
+  kube-score:
+    desc: Run kube-score only
+    cmds:
+      - |
+        {{.KUBECTL}} kustomize . \
+        | kube-score score \
+          --ignore-test pod-networkpolicy \
+          -
+    silent: true
+
+  polaris:dashboard:
+    desc: Run Polaris Dashboard
+    cmds:
+      - echo
+      - echo "Launching Polaris Dashboard..."
+      - |
+        {{.KUBECTL}} kustomize . \
+        | polaris audit \
+          --audit-path - \
+          > polaris-audit.json
+      - open http://localhost:8000
+      - |
+        polaris dashboard \
+          --port 8000 \
+          --load-audit-file polaris-audit.json
+    silent: true
+
+  install:
+    desc: Install all linters
+    deps:
+      - install:kubeval
+      - install:kube-linter
+      - install:polaris
+      - install:kube-score
+    silent: true
+
+  install:kubeval:
+    desc: Install kubeval
+    cmds:
+      - |
+        brew tap instrumenta/instrumenta
+        brew install kubeval
+        kubeval --version
+
+  install:kube-linter:
+    desc: Install kube-linter
+    cmds:
+      - |
+        brew install kube-linter
+        kube-linter version
+
+  install:polaris:
+    desc: Install Polaris
+    cmds:
+      - |
+        brew tap FairwindsOps/tap
+        brew install FairwindsOps/tap/polaris
+        polaris version
+
+  install:kube-score:
+    desc: Install kube-score
+    cmds:
+      - |
+        brew install kube-score
+        kube-score version

@@ -1,0 +1,19 @@
+# https://taskfile.dev
+
+version: "3"
+
+tasks:
+  install:
+    desc: Install ArgoCD CLI
+    cmds:
+      - brew install argocd
+
+  login:
+    desc: Login to ArgoCD
+    vars:
+      pass: '{{.PASS | default (env "ARGOCD_PASSWORD")}}'
+    cmds:
+      - |
+        argocd login \
+          --username admin \
+          --password {{.pass}}

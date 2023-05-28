@@ -1,0 +1,109 @@
+# https://taskfile.dev
+
+version: "3"
+
+tasks:
+  default:
+    desc: Install all the things
+    cmds:
+      - task: linters
+      - task: tools
+    silent: true
+
+  tools:
+    desc: Install all tools
+    output: prefixed
+    cmds:
+      - task: aws-cli
+      - task: eksctl
+      - task: jq
+      - task: yq
+      - task: kubeseal
+
+  aws-cli:
+    desc: Install AWS CLI
+    silent: true
+    cmds:
+      - brew install awscli
+      - echo
+      - echo -n "Installed "; which aws
+      - echo -n "Version   "; aws --version
+
+  eksctl:
+    desc: Install eksctl
+    silent: true
+    cmds:
+      - brew tap weaveworks/tap
+      - brew install weaveworks/tap/eksctl
+      - echo
+      - echo -n "Installed "; which eksctl
+      - echo -n "Version   "; eksctl version
+
+  jq:
+    desc: Install jq
+    silent: true
+    cmds:
+      - brew install jq
+      - echo
+      - echo -n "Installed "; which jq
+      - echo -n "Version   "; jq --version
+
+  yq:
+    desc: Install yq
+    silent: true
+    cmds:
+      - brew install yq
+      - echo
+      - echo -n "Installed "; which yq
+      - echo -n "Version   "; yq --version
+
+  kubeseal:
+    desc: Install kubeseal
+    silent: true
+    cmds:
+      - brew install kubeseal
+      - echo
+      - echo -n "Installed "; which kubeseal
+      - echo -n "Version   "; kubeseal --version
+
+  linters:
+    desc: Install all linters
+    cmds:
+      - task: kubeval
+      - task: kube-linter
+      - task: polaris
+      - task: kube-score
+
+  kubeval:
+    desc: Install kubeval
+    silent: true
+    cmds:
+      - |
+        brew tap instrumenta/instrumenta
+        brew install kubeval
+        kubeval --version
+
+  kube-linter:
+    desc: Install kube-linter
+    silent: true
+    cmds:
+      - |
+        brew install kube-linter
+        kube-linter version
+
+  polaris:
+    desc: Install Polaris
+    silent: true
+    cmds:
+      - |
+        brew tap FairwindsOps/tap
+        brew install FairwindsOps/tap/polaris
+        polaris version
+
+  kube-score:
+    desc: Install kube-score
+    silent: true
+    cmds:
+      - |
+        brew install kube-score
+        kube-score version
