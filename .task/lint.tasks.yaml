@@ -8,9 +8,6 @@ version: "3"
 #     begin: "\n\n🏃💨 {{.TASK}}\n"
 #     end: "\n🏁 {{.TASK}}"
 
-vars:
-  KUBECTL: kubectl --context {{ .KUBE_CONTEXT }}
-
 tasks:
   # https://learnk8s.io/validating-kubernetes-yaml
   default:

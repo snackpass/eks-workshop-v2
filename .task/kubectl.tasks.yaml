@@ -3,11 +3,191 @@
 version: "3"
 
 vars:
+  OUTPUT: '{{ .OUTPUT | default "yaml" }}'
   KUBECTL: kubectl --context {{ .KUBE_CONTEXT }}
+  PATTERN: '{{.PATTERN | default "."}}'
+  XQ: '{{if eq .OUTPUT "yaml"}}yq{{else}}jq{{end}}'
 
 tasks:
+  get-contexts:
+    desc: Show Kubernetes Contexts
+    cmds:
+      - |
+        kubectl config get-contexts
+
+  use-context:
+    desc: Use Kubernetes Context [name]
+    vars:
+      CONTEXT_NAME: '{{ .name | default "eks-workshop" }}'
+    cmds:
+      - |
+        kubectl config use-context {{ .CONTEXT_NAME }}
+
+  cluster-info:
+    desc: Show Kubernetes Cluster Info
+    cmds:
+      - kubectl cluster-info {{ .CLI_ARGS }}
+
+  get-nodes:
+    desc: Get Kubernetes Nodes
+    cmds:
+      - |
+        {{ .KUBECTL }} get nodes \
+          --output wide \
+          --label-columns topology.kubernetes.io/zone \
+          --label-columns eks.amazonaws.com/nodegroup \
+        {{ .CLI_ARGS }}
+
+  describe-nodes:
+    desc: Describe Kubernetes Nodes
+    cmds:
+      - |
+        {{ .KUBECTL }} describe nodes \
+          {{ .CLI_ARGS }}
+
+  describe-node:
+    desc: Describe a Kubernetes Node
+    vars:
+      NODE_NAME: "{{ .name }}"
+    cmds:
+      - |
+        {{ .KUBECTL }} describe node {{ .NODE_NAME }} \
+          {{ .CLI_ARGS }}
+
+  get-namespaces:
+    desc: Get Kubernetes Namespaces
+    cmds:
+      - |
+        {{ .KUBECTL }} get namespaces {{ .CLI_ARGS }}
+
+  get-ingress:
+    desc: Get Kubernetes Ingress
+    vars:
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{else}}-A{{end}}'
+    cmds:
+      - |
+        {{ .KUBECTL }} get ingress {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }}
+
+  get-ingress-url:
+    desc: Get Kubernetes Ingress URL
+    vars:
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{else}}-A{{end}}'
+    cmds:
+      - |
+        {{ .KUBECTL }} get ingress {{ .NAME }} {{ .NS }} \
+        -o jsonpath="{.status.loadBalancer.ingress[*].hostname}{'\n'}" \
+        {{ .CLI_ARGS }}
+
+  get-deployments:
+    desc: Get Kubernetes Deployments
+    vars:
+      NS: "{{if ne .ns nil}}-n {{ .ns }}{{else}}-A{{end}}"
+    cmds:
+      - |
+        {{ .KUBECTL }} get deployments {{ .NS }} {{ .CLI_ARGS }}
+
+  get-deployment:
+    desc: Get a Kubernetes Deployment
+    vars:
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{else}}-A{{end}}'
+    cmds:
+      - |
+        {{ .KUBECTL }} get deployment {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }} \
+          --output {{ .OUTPUT }} \
+        | {{ .XQ }} {{ .PATTERN }}
+
+  get-deployment-env:
+    desc: Get a Kubernetes Deployment's Environment Variables
+    cmds:
+      - task: get-deployment
+        vars:
+          PATTERN: "'.spec.template.spec.containers[] | .env'"
+
+  scale:
+    desc: Scale a Kubernetes Deployment
+    vars:
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{end}}'
+      SIZE: "{{ .size }}"
+    cmds:
+      - |
+        {{ .KUBECTL }} scale deployment {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }} \
+           --replicas={{ .SIZE }} \
+           --output {{ .OUTPUT }} \
+        | {{ .XQ }} {{ .PATTERN }}
+
+  rollout-status:
+    desc: Check rollout status of Kubernetes Deployment
+    vars:
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{end}}'
+    cmds:
+      - |
+        {{ .KUBECTL }} rollout status deployment {{ .NAME }} {{ .NS }} \
+          --timeout=180s {{ .CLI_ARGS }} \
+
+  delete-deployment:
+    desc: DELETE Kubernetes Deployment
+    vars:
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{end}}'
+    cmds:
+      - |
+        {{ .KUBECTL }} delete deployment {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }}
+
+  get-pods:
+    desc: Get Kubernetes Pods
+    vars:
+      NS: "{{if ne .ns nil}}-n {{ .ns }}{{else}}-A{{end}}"
+    cmds:
+      - |
+        {{ .KUBECTL }} get pods {{ .NS }} {{ .CLI_ARGS }}
+
+  describe-pod:
+    desc: Describe a Kubernetes Pod
+    vars:
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ splitList "-" .NAME | first }}{{end}}'
+    cmds:
+      - |
+        {{ .KUBECTL }} describe pod {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }}
+
+  pods-on-nodes:
+    desc: Show Kubernetes Pods on Nodes
+    vars:
+      NS: "{{if ne .ns nil}}-n {{ .ns }}{{else}}-A{{end}}"
+    cmds:
+      - |
+        kubectl get pods {{ .NS }} {{ .CLI_ARGS }} \
+        -o=jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.nodeName}{"\n"}'
+
+  get-secrets:
+    desc: Get Kubernetes Secrets
+    vars:
+      KEY: '{{ .key | default "" }}'
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{else}}-A{{end}}'
+    cmds:
+      - |
+        kubectl get secrets {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }}
+
+  get-secret-value:
+    desc: Get Kubernetes Secret value
+    vars:
+      KEY: '{{ .key | default "" }}'
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{else}}-A{{end}}'
+    cmds:
+      - |
+        kubectl get secrets {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }} \
+          --template {{"{{"}}.data.{{ .KEY }}{{"}}"}} \
+        | base64 -d
+
   diff:k:
     cmds:
       - |
-        {{.KUBECTL}} diff -k {{.path | default "."}} {{.CLI_ARGS}}
+        {{ .KUBECTL }} diff -k {{ .path | default "." }} {{ .CLI_ARGS }}
     ignore_error: true
