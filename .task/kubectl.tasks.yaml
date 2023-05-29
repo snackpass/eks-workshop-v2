@@ -9,13 +9,13 @@ vars:
   XQ: '{{if eq .OUTPUT "yaml"}}yq{{else}}jq{{end}}'
 
 tasks:
-  get-contexts:
+  get:contexts:
     desc: Show Kubernetes Contexts
     cmds:
       - |
         kubectl config get-contexts
 
-  use-context:
+  use:context:
     desc: Use Kubernetes Context [name]
     vars:
       CONTEXT_NAME: '{{ .name | default "eks-workshop" }}'
@@ -23,7 +23,7 @@ tasks:
       - |
         kubectl config use-context {{ .CONTEXT_NAME }}
 
-  cluster-info:
+  cluster:info:
     desc: Show Kubernetes Cluster Info
     cmds:
       - kubectl cluster-info {{ .CLI_ARGS }}
@@ -119,7 +119,7 @@ tasks:
            --output {{ .OUTPUT }} \
         | {{ .XQ }} {{ .PATTERN }}
 
-  rollout-status:
+  rollout:status:
     desc: Check rollout status of Kubernetes Deployment
     vars:
       NAME: '{{ .name | default "" }}'
@@ -155,7 +155,7 @@ tasks:
       - |
         {{ .KUBECTL }} describe pod {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }}
 
-  pods-on-nodes:
+  pods:on-nodes:
     desc: Show Kubernetes Pods on Nodes
     vars:
       NS: "{{if ne .ns nil}}-n {{ .ns }}{{else}}-A{{end}}"
@@ -183,7 +183,7 @@ tasks:
     cmds:
       - |
         {{ .KUBECTL }} get secrets {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }} \
-          --template {{"{{"}}.data.{{ .KEY }}{{"}}"}} \
+          -o "jsonpath={.data['{{ .KEY }}']}" \
         | base64 -d
 
   get:services:
@@ -204,7 +204,7 @@ tasks:
       - |
         {{ .KUBECTL }} describe service {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }}
 
-  get-service-lb-url:
+  get:service-lb-url:
     desc: Get the public URL of an EKS Service NLB
     vars:
       NAME: '{{ .name | default "" }}'
