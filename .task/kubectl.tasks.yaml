@@ -28,7 +28,7 @@ tasks:
     cmds:
       - kubectl cluster-info {{ .CLI_ARGS }}
 
-  get-nodes:
+  get:nodes:
     desc: Get Kubernetes Nodes
     cmds:
       - |
@@ -38,14 +38,14 @@ tasks:
           --label-columns eks.amazonaws.com/nodegroup \
         {{ .CLI_ARGS }}
 
-  describe-nodes:
+  describe:nodes:
     desc: Describe Kubernetes Nodes
     cmds:
       - |
         {{ .KUBECTL }} describe nodes \
           {{ .CLI_ARGS }}
 
-  describe-node:
+  describe:node:
     desc: Describe a Kubernetes Node
     vars:
       NODE_NAME: "{{ .name }}"
@@ -54,13 +54,13 @@ tasks:
         {{ .KUBECTL }} describe node {{ .NODE_NAME }} \
           {{ .CLI_ARGS }}
 
-  get-namespaces:
+  get:namespaces:
     desc: Get Kubernetes Namespaces
     cmds:
       - |
         {{ .KUBECTL }} get namespaces {{ .CLI_ARGS }}
 
-  get-ingress:
+  get:ingress:
     desc: Get Kubernetes Ingress
     vars:
       NAME: '{{ .name | default "" }}'
@@ -69,7 +69,7 @@ tasks:
       - |
         {{ .KUBECTL }} get ingress {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }}
 
-  get-ingress-url:
+  get:ingress:url:
     desc: Get Kubernetes Ingress URL
     vars:
       NAME: '{{ .name | default "" }}'
@@ -80,7 +80,7 @@ tasks:
         -o jsonpath="{.status.loadBalancer.ingress[*].hostname}{'\n'}" \
         {{ .CLI_ARGS }}
 
-  get-deployments:
+  get:deployments:
     desc: Get Kubernetes Deployments
     vars:
       NS: "{{if ne .ns nil}}-n {{ .ns }}{{else}}-A{{end}}"
@@ -88,7 +88,7 @@ tasks:
       - |
         {{ .KUBECTL }} get deployments {{ .NS }} {{ .CLI_ARGS }}
 
-  get-deployment:
+  get:deployment:
     desc: Get a Kubernetes Deployment
     vars:
       NAME: '{{ .name | default "" }}'
@@ -99,7 +99,7 @@ tasks:
           --output {{ .OUTPUT }} \
         | {{ .XQ }} {{ .PATTERN }}
 
-  get-deployment-env:
+  get:deployment:env:
     desc: Get a Kubernetes Deployment's Environment Variables
     cmds:
       - task: get-deployment
@@ -129,7 +129,7 @@ tasks:
         {{ .KUBECTL }} rollout status deployment {{ .NAME }} {{ .NS }} \
           --timeout=180s {{ .CLI_ARGS }} \
 
-  delete-deployment:
+  delete:deployment:
     desc: DELETE Kubernetes Deployment
     vars:
       NAME: '{{ .name | default "" }}'
@@ -138,7 +138,7 @@ tasks:
       - |
         {{ .KUBECTL }} delete deployment {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }}
 
-  get-pods:
+  get:pods:
     desc: Get Kubernetes Pods
     vars:
       NS: "{{if ne .ns nil}}-n {{ .ns }}{{else}}-A{{end}}"
@@ -146,7 +146,7 @@ tasks:
       - |
         {{ .KUBECTL }} get pods {{ .NS }} {{ .CLI_ARGS }}
 
-  describe-pod:
+  describe:pod:
     desc: Describe a Kubernetes Pod
     vars:
       NAME: '{{ .name | default "" }}'
@@ -161,10 +161,10 @@ tasks:
       NS: "{{if ne .ns nil}}-n {{ .ns }}{{else}}-A{{end}}"
     cmds:
       - |
-        kubectl get pods {{ .NS }} {{ .CLI_ARGS }} \
+        {{ .KUBECTL }} get pods {{ .NS }} {{ .CLI_ARGS }} \
         -o=jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.nodeName}{"\n"}'
 
-  get-secrets:
+  get:secrets:
     desc: Get Kubernetes Secrets
     vars:
       KEY: '{{ .key | default "" }}'
@@ -172,9 +172,9 @@ tasks:
       NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{else}}-A{{end}}'
     cmds:
       - |
-        kubectl get secrets {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }}
+        {{ .KUBECTL }} get secrets {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }}
 
-  get-secret-value:
+  get:secret:value:
     desc: Get Kubernetes Secret value
     vars:
       KEY: '{{ .key | default "" }}'
@@ -182,12 +182,122 @@ tasks:
       NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{else}}-A{{end}}'
     cmds:
       - |
-        kubectl get secrets {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }} \
+        {{ .KUBECTL }} get secrets {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }} \
           --template {{"{{"}}.data.{{ .KEY }}{{"}}"}} \
         | base64 -d
 
-  diff:k:
+  get:services:
+    desc: Get Kubernetes Services
+    vars:
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{else}}-A{{end}}'
     cmds:
       - |
-        {{ .KUBECTL }} diff -k {{ .path | default "." }} {{ .CLI_ARGS }}
+        {{ .KUBECTL }} get services {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }}
+
+  describe:service:
+    desc: Describe a Kubernetes Service
+    vars:
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{else}}-A{{end}}'
+    cmds:
+      - |
+        {{ .KUBECTL }} describe service {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }}
+
+  get-service-lb-url:
+    desc: Get the public URL of an EKS Service NLB
+    vars:
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{else}}-A{{end}}'
+    cmds:
+      - |
+        {{ .KUBECTL }} get service {{ .NAME }} {{ .NS }} {{ .CLI_ARGS }} \
+          -o jsonpath="{.status.loadBalancer.ingress[*].hostname}{'\n'}"
+
+  apply:
+    desc: Apply Kubernetes manifest
+    vars:
+      F: "{{ if ne .f nil }}-f {{ .f }}{{ end }}"
+      K: "{{ if ne .k nil }}-k {{ .k }}{{ end }}"
+    cmds:
+      - |
+        {{ .KUBECTL }} apply {{ .F }}{{ .K }} {{ .CLI_ARGS }}
+
+  diff:
+    desc: Diff Kubernetes resources
+    vars:
+      F: "{{ if ne .f nil }}-f {{ .f }}{{ end }}"
+      K: "{{ if ne .k nil }}-k {{ .k }}{{ end }}"
+    cmds:
+      - |
+        {{ .KUBECTL }} diff {{ .F }}{{ .K }} {{ .CLI_ARGS }}
     ignore_error: true
+
+  logs:
+    aliases: [logs:deployment]
+    desc: Print Deployment Logs
+    vars:
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{end}}'
+      C: "{{if ne .c nil}}-c {{ .c }}{{else}}--all-containers=true{{end}}"
+    cmds:
+      - |
+        {{ .KUBECTL }} logs deployment/{{ .NAME }} {{ .NS }} {{ .C }} {{ .CLI_ARGS }}
+
+  logs:pod:
+    desc: Print Pod Logs
+    vars:
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ splitList "-" .NAME | first }}{{end}}'
+      C: "{{if ne .c nil}}-c {{ .c }}{{else}}--all-containers=true{{end}}"
+    cmds:
+      - |
+        {{ .KUBECTL }} logs {{ .NAME }} {{ .NS }} {{ .C }} {{ .CLI_ARGS }}
+
+  tail:
+    aliases: [tail:deployment]
+    desc: Tail Deployment Logs
+    cmds:
+      - task: logs:deployment
+        vars:
+          CLI_ARGS: -f
+
+  tail:pod:
+    desc: Tail Pod Logs
+    cmds:
+      - task: logs
+        vars:
+          CLI_ARGS: -f
+
+  exec:
+    aliases: [exec:deployment]
+    desc: Exec into a Deployment
+    vars:
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{end}}'
+      C: "{{if ne .c nil}}-c {{ .c }}{{end}}"
+    cmds:
+      - |
+        {{ .KUBECTL }} exec deployment/{{ .NAME }} {{ .NS }} {{ .C }} -- {{ .CLI_ARGS }}
+
+  exec:pod:
+    desc: Exec into a Pod
+    vars:
+      NAME: '{{ .name | default "" }}'
+      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ splitList "-" .NAME | first }}{{end}}'
+      C: "{{if ne .c nil}}-c {{ .c }}{{end}}"
+    cmds:
+      - |
+        {{ .KUBECTL }} exec {{ .NAME }} {{ .NS }} {{ .C }} -- {{ .CLI_ARGS }}
+
+  wait:nodes:
+    desc: Wait for ready nodes
+    cmds:
+      - |
+        {{ .KUBECTL }} wait nodes --all --timeout=300s {{ .CLI_ARGS }}
+
+  wait:pods:
+    desc: Wait for ready pods
+    cmds:
+      - |
+        {{ .KUBECTL }} wait pods --all --timeout=180s {{ .CLI_ARGS }}
