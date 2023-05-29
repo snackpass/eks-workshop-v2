@@ -237,35 +237,34 @@ tasks:
     aliases: [logs:deployment]
     desc: Print Deployment Logs
     vars:
+      PREFIX: '{{ .PREFIX | default "deployment/" }}'
       NAME: '{{ .name | default "" }}'
       NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{end}}'
       C: "{{if ne .c nil}}-c {{ .c }}{{else}}--all-containers=true{{end}}"
     cmds:
       - |
-        {{ .KUBECTL }} logs deployment/{{ .NAME }} {{ .NS }} {{ .C }} {{ .CLI_ARGS }}
+        {{ .KUBECTL }} logs {{ .PREFIX }}{{ .NAME }} {{ .NS }} {{ .C }} {{ .CLI_ARGS }}
 
   logs:pod:
     desc: Print Pod Logs
-    vars:
-      NAME: '{{ .name | default "" }}'
-      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ splitList "-" .NAME | first }}{{end}}'
-      C: "{{if ne .c nil}}-c {{ .c }}{{else}}--all-containers=true{{end}}"
     cmds:
-      - |
-        {{ .KUBECTL }} logs {{ .NAME }} {{ .NS }} {{ .C }} {{ .CLI_ARGS }}
+      - task: logs
+        vars:
+          PREFIX: " "
+          ns: '{{if ne .ns nil}}{{ .ns }}{{else if ne .name ""}}{{ splitList "-" .name | first }}{{end}}'
 
   tail:
     aliases: [tail:deployment]
     desc: Tail Deployment Logs
     cmds:
-      - task: logs:deployment
+      - task: logs
         vars:
           CLI_ARGS: -f
 
   tail:pod:
     desc: Tail Pod Logs
     cmds:
-      - task: logs
+      - task: logs:pod
         vars:
           CLI_ARGS: -f
 
@@ -273,22 +272,21 @@ tasks:
     aliases: [exec:deployment]
     desc: Exec into a Deployment
     vars:
+      PREFIX: '{{ .PREFIX | default "deployment/" }}'
       NAME: '{{ .name | default "" }}'
       NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ .NAME }}{{end}}'
       C: "{{if ne .c nil}}-c {{ .c }}{{end}}"
     cmds:
       - |
-        {{ .KUBECTL }} exec deployment/{{ .NAME }} {{ .NS }} {{ .C }} -- {{ .CLI_ARGS }}
+        {{ .KUBECTL }} exec -it {{ .PREFIX }}{{ .NAME }} {{ .NS }} {{ .C }} -- {{ .CLI_ARGS }}
 
   exec:pod:
     desc: Exec into a Pod
-    vars:
-      NAME: '{{ .name | default "" }}'
-      NS: '{{if ne .ns nil}}-n {{ .ns }}{{else if ne .NAME ""}}-n {{ splitList "-" .NAME | first }}{{end}}'
-      C: "{{if ne .c nil}}-c {{ .c }}{{end}}"
     cmds:
-      - |
-        {{ .KUBECTL }} exec {{ .NAME }} {{ .NS }} {{ .C }} -- {{ .CLI_ARGS }}
+      - task: exec
+        vars:
+          PREFIX: " "
+          ns: '{{if ne .ns nil}}{{ .ns }}{{else if ne .name ""}}{{ splitList "-" .name | first }}{{end}}'
 
   wait:nodes:
     desc: Wait for ready nodes
